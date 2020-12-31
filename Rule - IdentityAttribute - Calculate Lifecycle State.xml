@@ -1,0 +1,153 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE Rule PUBLIC "sailpoint.dtd" "sailpoint.dtd">
+<Rule language="beanshell" name="Calculate Lifecycle State" type="IdentityAttribute">
+  <Attributes>
+    <Map>
+      <entry key="requiresPeriodicRefresh" value="true"/>
+    </Map>
+  </Attributes>
+  <Description>Determines lifecycle state given a start and end date.</Description>
+  <Source><![CDATA[
+import sailpoint.object.*;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.TimeZone;
+​
+String FirstName = identity.getAttribute("firstname");
+String LastName = identity.getAttribute("lastname");
+​
+log.error("Calculating LCS for " +  FirstName + " " + LastName);
+		/*
+		 * Author : Omar Khote 21/04/2020
+		 * Returns:
+		 * This rule calculates the  cloudLifecycleState for the user:
+		 * 1. Leaver
+		 * 2. Quarantined
+		 * 3. Active
+		 *
+		 */
+​
+		public Date modDate(Date orDate, int days) {
+​
+			Calendar cal = Calendar.getInstance();
+			cal.setTime(orDate);
+			cal.add(Calendar.DATE, days);
+			cal.set(Calendar.HOUR_OF_DAY, 0);
+			cal.set(Calendar.MINUTE, 0);
+			cal.set(Calendar.SECOND, 0);
+			cal.set(Calendar.MILLISECOND, 0);
+			return cal.getTime();
+​
+		}
+​
+		public Date modDateStartDay(Date orDate) {
+​
+			Calendar cal = Calendar.getInstance();
+			cal.setTime(orDate);
+			cal.set(Calendar.HOUR_OF_DAY, 0);
+			cal.set(Calendar.MINUTE, 0);
+			cal.set(Calendar.SECOND, 0);
+			cal.set(Calendar.MILLISECOND, 0);
+			return cal.getTime();
+​
+		}
+​
+		public String determineStateWH(String startDateString, String endDateString, String dateFormat){
+​
+		log.error("Calculating LCS for " +  FirstName + " " + LastName + ", startDateString: "  + startDateString + ", endDateString: " + endDateString + ", dateFormat: " + dateFormat);
+​
+			//Date format needs to be ISO8601 format as input and output lifecycle state - 20200421T00:00:00.000Z
+			SimpleDateFormat dateFormater = new SimpleDateFormat(dateFormat);
+			dateFormater.setTimeZone(TimeZone.getTimeZone("GMT"));
+​
+			Date endDate = null;
+			Date startDate = null;
+			Date endDate28daysBeforeToday = null;
+			Date today = new Date();
+			Date endDateQuarantine1DayAfterLeaveDate = null;
+​
+​
+​
+				try {
+					endDate = (endDateString != null && !endDateString.isEmpty()) ? dateFormater.parse(endDateString) : null;
+					log.error("Calculating LCS for " +  FirstName + " " + LastName + ", endDate: " + endDate);
+				}
+				catch (ParseException e) {
+					log.error(e.getMessage());
+				}
+​
+				try {
+					startDate = (startDateString != null && !startDateString.isEmpty()) ? modDateStartDay(dateFormater.parse(startDateString)) : null;
+					log.error("Calculating LCS for " +  FirstName + " " + LastName  + ", StartDate " + startDate);
+				}
+				catch (ParseException e) {
+					log.error(e.getMessage());
+				}
+​
+				endDate28daysBeforeToday  = modDate(today,-28);
+				log.error("Calculating LCS for " +  FirstName + " " + LastName + ", endDate28daysBeforeToday " + endDate28daysBeforeToday );
+​
+				try {
+					endDateQuarantine1DayAfterLeaveDate = (endDateString != null && !endDateString.isEmpty()) ? modDate(dateFormater.parse(endDateString), 1) : null;
+						log.error("Calculating LCS for " +  FirstName + " " + LastName  + ", endDateQuarantine1DayAfterLeaveDate " + endDateQuarantine1DayAfterLeaveDate );
+				}
+				catch (ParseException e) {
+					log.error(e.getMessage());
+				}
+​
+​
+				return determineStateWHAfterDateMath(startDate, endDate, endDate28daysBeforeToday, endDateQuarantine1DayAfterLeaveDate);
+​
+​
+		}
+​
+​
+		public String determineStateWHAfterDateMath(Date startDate, Date endDate, Date endDate28daysBeforeToday, Date endDateQuarantine1DayAfterLeaveDate){
+​
+		log.error("Calculating LCS for " +  FirstName + " " + LastName + ", Inside determineStateWHAfterDateMath");
+​
+			final String STATE_ACTIVE = "active";
+			final String STATE_LEAVER = "leaver";
+			final String STATE_QUARANTINED = "quarantined";
+​
+			Date today = new Date();
+​
+		log.error("Calculating LCS for " +  identity.getAttribute( "firstName")+ " " + identity.getAttribute( "lastName")  + ", today " +  today);
+​
+			if((startDate == null) && (endDate == null)) {
+			log.error("Calculating LCS for " +  FirstName + " " + LastName  + ", startDate == null && endDate == null return is " + STATE_ACTIVE);
+				return STATE_ACTIVE;
+​
+			}
+​
+			if(endDate != null) {
+				if(endDate.before(endDate28daysBeforeToday) && today.after(endDate)) {
+				log.error("Calculating LCS for " +  FirstName + " " + LastName + ", endDate != null return is "  +  STATE_LEAVER);
+					return STATE_LEAVER;
+				}
+​
+				if(today.after(endDateQuarantine1DayAfterLeaveDate)) {
+				log.error("Calculating LCS for " +  FirstName + " " + LastName + ", today is after endDateQuarantine1DayAfterLeaveDate return is  " + STATE_QUARANTINED);
+					return STATE_QUARANTINED;
+				}
+			}
+​
+				log.error("Calculating LCS for " +  FirstName + " " + LastName + ", if not in first two blocks return  " +  STATE_ACTIVE);
+			return STATE_ACTIVE;
+		}
+​
+​
+​
+			String startDateString = identity.getAttribute("startDate");
+			log.error("Calculating LCS for " +  FirstName + " " + LastName + ", startDateString from IDN   " + startDateString);
+			String endDateString = identity.getAttribute("endDate");
+			log.error("Calculating LCS for " +  FirstName + " " + LastName  + ", endDateString from IDN   " +  endDateString);
+​
+			String calculatedState = determineStateWH(startDateString, endDateString, "yyyy-MM-dd'T'HH:mm:ss.SSSX");
+			log.error("Calculated LCS for " +  FirstName + " " + LastName  + ", endDateString from IDN   " +  endDateString + " to: " + calculatedState);
+​
+			return calculatedState;
+	]]></Source>
+</Rule>
